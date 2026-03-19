@@ -1,5 +1,5 @@
 {
-  "name": "@rivium-storage/react-native",
+  "name": "@rivium/storage-react-native",
   "version": "0.1.0",
   "description": "Official React Native SDK for RiviumStorage - File storage and image transformation service",
   "main": "dist/index.js",
@@ -8,7 +8,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npx tsc",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
