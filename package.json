@@ -1,0 +1,35 @@
+{
+  "name": "@rivium-storage/react-native",
+  "version": "0.1.0",
+  "description": "Official React Native SDK for RiviumStorage - File storage and image transformation service",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "rivium-storage",
+    "rivium",
+    "storage",
+    "file-upload",
+    "image-transformation",
+    "cdn",
+    "react-native"
+  ],
+  "author": "Rivium",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rivium-co/rivium-storage-react-native-sdk.git"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.60.0"
+  }
+}

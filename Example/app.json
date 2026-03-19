@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "RiviumStorage Example",
+    "slug": "rivium-storage-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#6200EE"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "co.rivium.storage.example"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#6200EE"
+      },
+      "package": "co.rivium.storage.example"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}
