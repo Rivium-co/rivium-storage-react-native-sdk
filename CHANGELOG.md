@@ -3,15 +3,12 @@
 ## 0.2.0
 
 ### Added
-- Rivium user token support: `tokenProvider` and `userToken` config options, `setUserToken(token | null)` and `refreshUserToken()`. The token is sent as `x-user-token` on every request (upload and download included); `x-user-id` is not sent while a token is present.
-- The token is fetched lazily before the first request, cached, replaced shortly before it expires, and on a 401 `token_expired` / `token_invalid` the provider is asked once more and the request retried once. Concurrent requests share one provider call.
-- A 401 `token_required` throws a `RiviumStorageException` (code `token_required`) that says to configure `tokenProvider`.
-- `RiviumStorageException.code` now carries the server's error `code`.
-- Tests (`npm test`, Node's built-in runner, no new dependencies).
+- Sign users in with a Rivium user token — the same token Rivium Sync, Chat, Push and A/B Testing accept (a Rivium Auth sign-in token works as is). Pass a `tokenProvider` (or a `userToken`) in the config, or call `setUserToken()` / `refreshUserToken()` later. The SDK sends the token with every request and gets a new one when it expires, so your access rules see a verified user.
+- New error code `token_required` on `RiviumStorageException` when the project requires a signed-in user and no token is available.
+- `RiviumStorageException.code` now carries the error code returned by the server.
 
 ### Changed
-- `userId` / `setUserId()` are documented as legacy (the server can't verify a client-chosen id); behaviour unchanged.
-- URL helpers (`getUrl`, `getTransformUrl`, `getDownloadUrl`) are documented as unable to carry the token; behaviour unchanged.
+- `userId` / `setUserId()` still work but are deprecated: the server can't verify a user ID sent by an app. Use `tokenProvider`.
 
 ## 0.1.0
 
