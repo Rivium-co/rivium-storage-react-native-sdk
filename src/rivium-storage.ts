@@ -10,6 +10,7 @@ import {
   RiviumStorageException,
   RiviumStorageTokenProvider,
 } from './models';
+import { SDK_HEADER, SDK_HEADER_VALUE } from './version';
 
 const API_BASE_URL = 'https://storage.rivium.co';
 const DEFAULT_TIMEOUT = 30000;
@@ -253,8 +254,12 @@ export class RiviumStorage {
 
   /// Identity headers: the user token when there is one (and then no
   /// `x-user-id`, which the server ignores anyway), else the legacy user id.
+  /// Every request also names the SDK (`X-Rivium-SDK: <name>/<version>`).
   private async authHeaders(): Promise<Record<string, string>> {
-    const headers: Record<string, string> = { 'x-api-key': this.apiKey };
+    const headers: Record<string, string> = {
+      'x-api-key': this.apiKey,
+      [SDK_HEADER]: SDK_HEADER_VALUE,
+    };
     const token = await this.ensureUserToken();
     if (token) {
       headers['x-user-token'] = token;
