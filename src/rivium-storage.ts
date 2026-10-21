@@ -8,6 +8,7 @@ import {
   ListFilesOptions,
   ImageTransforms,
   RiviumStorageException,
+  RiviumStorageTokenProvider,
 } from './models';
 
 const API_BASE_URL = 'https://storage.rivium.co';
@@ -79,6 +80,51 @@ function stringToBytes(str: string): Uint8Array {
   return new Uint8Array(arr);
 }
 
+/// Base64 to a binary string (Hermes before RN 0.74 has no atob).
+function decode64(input: string): string {
+  let output = '';
+  let buffer = 0;
+  let bits = 0;
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i];
+    if (c === '=') break;
+    const value = BASE64_CHARS.indexOf(c);
+    if (value < 0) continue;
+    buffer = (buffer << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      output += String.fromCharCode((buffer >> bits) & 0xff);
+    }
+  }
+  return output;
+}
+
+/// Seconds since the epoch at which a JWT expires, 0 if unreadable.
+function tokenExpiry(token: string): number {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return 0;
+    let base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) base64 += '=';
+    const binary = decode64(base64);
+    const exp = JSON.parse(binary)?.exp;
+    return typeof exp === 'number' ? exp : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/// The `code` of a JSON error body, without consuming the response.
+async function readErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body: any = await response.clone().json();
+    return typeof body?.code === 'string' ? body.code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /// RiviumStorage React Native SDK
 ///
 /// Official SDK for RiviumStorage file storage and image transformation service.
@@ -102,6 +148,15 @@ export class RiviumStorage {
   private baseUrl: string;
   private timeout: number;
   private _userId: string | null;
+  private tokenProvider: RiviumStorageTokenProvider | null;
+  /** A token set with `userToken` or `setUserToken()` without a provider. */
+  private staticUserToken: string | null;
+  private userToken: string | null = null;
+  private userTokenExpiresAt = 0;
+  private userTokenInFlight: Promise<string | null> | null = null;
+
+  /** Seconds before expiry at which a token is replaced. */
+  private static readonly TOKEN_REFRESH_SKEW_S = 60;
 
   /// Create a new RiviumStorage instance
   ///
@@ -115,9 +170,14 @@ export class RiviumStorage {
     this.baseUrl = API_BASE_URL;
     this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
     this._userId = config.userId ?? null;
+    this.tokenProvider = config.tokenProvider ?? null;
+    this.staticUserToken = config.userToken ?? null;
   }
 
-  /// Set the user ID for bucket policy enforcement
+  /// Legacy: set the user id sent as `x-user-id` for bucket rules.
+  ///
+  /// The server cannot verify a client-chosen id; use `tokenProvider` (or
+  /// `setUserToken`) instead. Ignored by the server whenever a token is sent.
   setUserId(userId: string | null): void {
     this._userId = userId;
   }
@@ -128,19 +188,130 @@ export class RiviumStorage {
   }
 
   // ==========================================
-  // Private Helpers
+  // Rivium user token
   // ==========================================
 
-  private get headers(): Record<string, string> {
-    const h: Record<string, string> = {
-      'x-api-key': this.apiKey,
-      'Content-Type': 'application/json',
-    };
-    if (this._userId) {
-      h['x-user-id'] = this._userId;
+  /// Replace the user token, or pass `null` when the user signs out.
+  ///
+  /// With a `tokenProvider`, the token is used until it nears expiry and then
+  /// the provider is asked again; `null` makes the next request ask the
+  /// provider. Without one, the token is used as is until you replace it.
+  async setUserToken(token: string | null): Promise<void> {
+    if (this.tokenProvider) {
+      this.userToken = token;
+      this.userTokenExpiresAt = token ? tokenExpiry(token) : 0;
+    } else {
+      this.staticUserToken = token;
     }
-    return h;
   }
+
+  /// Ask `tokenProvider` again. Call this when the user signs in or out.
+  async refreshUserToken(): Promise<void> {
+    this.invalidateUserToken();
+    await this.ensureUserToken();
+  }
+
+  /// The current user token, fetched through `tokenProvider` when needed.
+  /// Concurrent callers share one in-flight provider call.
+  private async ensureUserToken(): Promise<string | null> {
+    if (!this.tokenProvider) return this.staticUserToken;
+
+    const nowS = Math.floor(Date.now() / 1000);
+    if (
+      this.userToken &&
+      (this.userTokenExpiresAt === 0 ||
+        this.userTokenExpiresAt - RiviumStorage.TOKEN_REFRESH_SKEW_S > nowS)
+    ) {
+      return this.userToken;
+    }
+    if (this.userTokenInFlight) return this.userTokenInFlight;
+
+    const provider = this.tokenProvider;
+    this.userTokenInFlight = (async () => {
+      try {
+        const token = (await provider()) ?? null;
+        this.userToken = token;
+        this.userTokenExpiresAt = token ? tokenExpiry(token) : 0;
+        return token;
+      } catch (e) {
+        console.error('[RiviumStorage] tokenProvider failed:', e);
+        // Keep the old token: it may still be valid, and the server decides.
+        return this.userToken;
+      } finally {
+        this.userTokenInFlight = null;
+      }
+    })();
+
+    return this.userTokenInFlight;
+  }
+
+  /** Drop the cached token so the next request asks the provider again. */
+  private invalidateUserToken(): void {
+    this.userToken = null;
+    this.userTokenExpiresAt = 0;
+  }
+
+  /// Identity headers: the user token when there is one (and then no
+  /// `x-user-id`, which the server ignores anyway), else the legacy user id.
+  private async authHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = { 'x-api-key': this.apiKey };
+    const token = await this.ensureUserToken();
+    if (token) {
+      headers['x-user-token'] = token;
+    } else if (this._userId) {
+      headers['x-user-id'] = this._userId;
+    }
+    return headers;
+  }
+
+  /// Every API call goes through here. On a 401 `token_expired` or
+  /// `token_invalid` the provider is asked once more and the request retried
+  /// once, so a transient expiry never reaches the caller.
+  private async authedFetch(
+    url: string,
+    init: RequestInit,
+    extraHeaders: Record<string, string> = {},
+    retry = true,
+  ): Promise<Response> {
+    const headers = { ...(await this.authHeaders()), ...extraHeaders };
+    const response = await fetch(url, { ...init, headers });
+
+    if (response.status === 401 && retry && this.tokenProvider) {
+      const code = await readErrorCode(response);
+      if (code === 'token_expired' || code === 'token_invalid') {
+        this.invalidateUserToken();
+        return this.authedFetch(url, init, extraHeaders, false);
+      }
+    }
+    return response;
+  }
+
+  /// The exception for a failed response, with the server's `code`.
+  private async errorFrom(
+    response: Response,
+    fallback: string,
+    useServerMessage = true,
+  ): Promise<RiviumStorageException> {
+    let message = fallback;
+    let code: string | undefined;
+    try {
+      const error: any = await response.json();
+      if (useServerMessage && error?.message) message = error.message;
+      if (typeof error?.code === 'string') code = error.code;
+    } catch {
+      // ignore parse errors
+    }
+    if (code === 'token_required') {
+      message = this.tokenProvider || this.staticUserToken
+        ? 'This project requires a signed-in user, and no Rivium user token was available (tokenProvider returned null?). Sign the user in, then call refreshUserToken().'
+        : 'This project requires a Rivium user token. Pass tokenProvider to new RiviumStorage({ ... }) returning a token minted by your server (POST https://auth.rivium.co/users/token) or a Rivium Auth sign-in token.';
+    }
+    return new RiviumStorageException(message, response.status, code);
+  }
+
+  // ==========================================
+  // Private Helpers
+  // ==========================================
 
   private async request<T>(
     method: string,
@@ -155,24 +326,20 @@ export class RiviumStorage {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method,
-        headers: this.headers,
-        body: options?.body ? JSON.stringify(options.body) : undefined,
-        signal: controller.signal,
-      });
+      const response = await this.authedFetch(
+        `${this.baseUrl}${endpoint}`,
+        {
+          method,
+          body: options?.body ? JSON.stringify(options.body) : undefined,
+          signal: controller.signal,
+        },
+        { 'Content-Type': 'application/json' },
+      );
 
       clearTimeout(timeoutId);
 
       if (response.status >= 400) {
-        let message = `HTTP ${response.status}`;
-        try {
-          const error: any = await response.json();
-          message = error.message ?? message;
-        } catch {
-          // ignore parse errors
-        }
-        throw new RiviumStorageException(message, response.status);
+        throw await this.errorFrom(response, `HTTP ${response.status}`);
       }
 
       if (response.status === 204) {
@@ -280,18 +447,10 @@ export class RiviumStorage {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const headers: Record<string, string> = {
-        'x-api-key': this.apiKey,
-      };
-      if (this._userId) {
-        headers['x-user-id'] = this._userId;
-      }
-
-      const response = await fetch(
+      const response = await this.authedFetch(
         `${this.baseUrl}/api/v1/buckets/${bucketId}/files`,
         {
           method: 'POST',
-          headers,
           body: formData,
           signal: controller.signal,
         },
@@ -300,14 +459,7 @@ export class RiviumStorage {
       clearTimeout(timeoutId);
 
       if (response.status >= 400) {
-        let message = `Upload failed: ${response.status}`;
-        try {
-          const error: any = await response.json();
-          message = error.message ?? message;
-        } catch {
-          // ignore parse errors
-        }
-        throw new RiviumStorageException(message, response.status);
+        throw await this.errorFrom(response, `Upload failed: ${response.status}`);
       }
 
       return (await response.json()) as StorageFile;
@@ -366,23 +518,15 @@ export class RiviumStorage {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(
+      const response = await this.authedFetch(
         `${this.baseUrl}/api/v1/files/${fileId}/download`,
-        {
-          headers: this._userId
-            ? { 'x-api-key': this.apiKey, 'x-user-id': this._userId }
-            : { 'x-api-key': this.apiKey },
-          signal: controller.signal,
-        },
+        { signal: controller.signal },
       );
 
       clearTimeout(timeoutId);
 
       if (response.status >= 400) {
-        throw new RiviumStorageException(
-          `Download failed: ${response.status}`,
-          response.status,
-        );
+        throw await this.errorFrom(response, `Download failed: ${response.status}`, false);
       }
 
       return response.arrayBuffer();
@@ -418,6 +562,10 @@ export class RiviumStorage {
   // ==========================================
 
   /// Get public URL for a file (only works for public buckets)
+  ///
+  /// NOTE: a URL cannot carry the user token (or any header). It works for
+  /// public buckets or with a signed URL from your server; for a private file
+  /// use `download()`, which sends the token.
   getUrl(fileId: string): string {
     return `${this.baseUrl}/api/v1/files/${fileId}/url`;
   }
@@ -426,6 +574,10 @@ export class RiviumStorage {
   ///
   /// [fileId] - The file ID
   /// [transforms] - Image transformation options
+  ///
+  /// NOTE: a URL cannot carry the user token (or any header). It works for
+  /// public buckets or with a signed URL from your server; for a private file
+  /// use `download()`, which sends the token.
   getTransformUrl(fileId: string, transforms?: ImageTransforms): string {
     const params: string[] = [];
 
@@ -445,6 +597,10 @@ export class RiviumStorage {
   }
 
   /// Get download URL (for direct access without SDK)
+  ///
+  /// NOTE: a URL cannot carry the user token (or any header). It works for
+  /// public buckets or with a signed URL from your server; for a private file
+  /// use `download()`, which sends the token.
   getDownloadUrl(fileId: string): string {
     return `${this.baseUrl}/api/v1/files/${fileId}/download`;
   }

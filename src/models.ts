@@ -6,9 +6,36 @@ export interface RiviumStorageConfig {
   /// Request timeout in milliseconds (default: 30000)
   timeout?: number;
 
-  /// Optional user ID for bucket policy enforcement
+  /// Legacy: a user id sent as the `x-user-id` header for bucket rules.
+  ///
+  /// NOTE: this is a plain string the client chooses, so the server cannot
+  /// verify it - anyone who unpacks your app can change it. Use
+  /// `tokenProvider` instead. Ignored by the server whenever a user token is
+  /// sent.
   userId?: string;
+
+  /// Returns a Rivium user token for the signed-in user, minted by YOUR server.
+  ///
+  /// Your backend calls `POST https://auth.rivium.co/users/token` with your API
+  /// key AND your server secret (never ship the secret in an app) and returns
+  /// the token. A Rivium Auth sign-in token works as is. The SDK asks for it
+  /// before the first request, sends it as `x-user-token` on every request,
+  /// replaces it shortly before it expires, and asks again (retrying the
+  /// request once) if the server says it expired or is invalid. This is what
+  /// makes the user in your bucket rules trustworthy.
+  ///
+  /// Return `null` when no one is signed in, and call `refreshUserToken()`
+  /// when the user signs in or out. Same option as the other Rivium SDKs.
+  tokenProvider?: RiviumStorageTokenProvider;
+
+  /// A user token you already hold. `tokenProvider` is preferred: a static
+  /// token cannot be refreshed when it expires.
+  userToken?: string;
 }
+
+/// Returns the signed-in user's Rivium user token, or `null` when no one is
+/// signed in.
+export type RiviumStorageTokenProvider = () => string | null | Promise<string | null>;
 
 /// Bucket model
 export interface Bucket {

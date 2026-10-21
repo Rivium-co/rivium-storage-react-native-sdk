@@ -24,6 +24,7 @@
 export { RiviumStorage } from './rivium-storage';
 export {
   RiviumStorageConfig,
+  RiviumStorageTokenProvider,
   Bucket,
   StorageFile,
   ListFilesResult,
