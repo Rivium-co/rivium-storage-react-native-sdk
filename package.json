@@ -1,6 +1,6 @@
 {
   "name": "@rivium/storage-react-native",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Official React Native SDK for RiviumStorage - File storage and image transformation service",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

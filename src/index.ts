@@ -23,6 +23,14 @@
 
 export { RiviumStorage } from './rivium-storage';
 export { SDK_NAME, SDK_VERSION } from './version';
+export { StorageErrorCode } from './error-codes';
+export { publicImageUrl } from './url-segments';
+export {
+  contentTypeForPath,
+  CONTENT_TYPES_BY_EXTENSION,
+  DEFAULT_CONTENT_TYPE,
+  FILE_TYPES_VERSION,
+} from './file-types';
 export {
   RiviumStorageConfig,
   RiviumStorageTokenProvider,
@@ -31,6 +39,7 @@ export {
   ListFilesResult,
   DeleteManyResult,
   UploadOptions,
+  UploadProgress,
   ListFilesOptions,
   ImageTransforms,
   RiviumStorageException,

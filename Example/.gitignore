@@ -1,0 +1,12 @@
+# Real keys and URLs for this example (see README.md)
+.env
+.env.local
+!.env.example
+# The repository root ignores these; this example needs them committed
+!metro.config.js
+# Native projects made by `expo run:*` / `expo prebuild`
+ios/
+android/
+.expo/
+.expo-export-check/
+dist/

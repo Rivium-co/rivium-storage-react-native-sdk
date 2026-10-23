@@ -4,23 +4,43 @@
     "slug": "rivium-storage-example",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
-      "backgroundColor": "#6200EE"
+      "backgroundColor": "#4F46E5"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "co.rivium.storage.example"
+      "bundleIdentifier": "co.rivium.storage.example",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "Reach your local token server while testing."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#6200EE"
+        "backgroundColor": "#4F46E5"
       },
       "package": "co.rivium.storage.example"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pick a photo to upload it to Rivium Storage.",
+          "cameraPermission": "Take a photo to upload it to Rivium Storage."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ]
   }
 }

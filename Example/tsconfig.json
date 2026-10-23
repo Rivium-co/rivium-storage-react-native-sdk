@@ -2,6 +2,11 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "jsx": "react-native"
-  }
+    "jsx": "react-native",
+    "baseUrl": ".",
+    "paths": {
+      "@rivium/storage-react-native": ["../src/index.ts"]
+    }
+  },
+  "include": ["App.tsx", "index.js", "src/**/*.ts", "src/**/*.tsx", "expo-env.d.ts"]
 }

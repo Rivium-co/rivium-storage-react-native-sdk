@@ -5,15 +5,22 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "android:release": "expo run:android --variant release",
+    "ios:release": "expo run:ios --configuration Release",
+    "typecheck": "tsc --noEmit",
+    "bundle:check": "expo export --platform ios --platform android --output-dir .expo-export-check"
   },
   "dependencies": {
-    "@rivium-storage/react-native": "file:../",
+    "@rivium/storage-react-native": "file:../",
     "expo": "~52.0.0",
     "expo-asset": "~11.0.5",
+    "expo-build-properties": "~0.13.3",
     "expo-document-picker": "~13.0.0",
+    "expo-file-system": "~18.0.12",
+    "expo-image-picker": "~16.0.6",
+    "expo-status-bar": "~2.0.1",
     "react": "18.3.1",
     "react-native": "0.76.0"
   },

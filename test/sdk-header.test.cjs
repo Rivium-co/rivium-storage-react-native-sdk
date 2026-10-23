@@ -10,7 +10,7 @@ let calls;
 
 const fileJson = {
   id: 'f1', bucketId: 'b1', path: 'a.txt', fileName: 'a.txt', mimeType: 'text/plain', size: 5,
-  storageKey: 'k', isDeleted: false, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
 beforeEach(() => {
@@ -34,7 +34,7 @@ test('SDK_NAME is react-native and SDK_VERSION matches package.json', () => {
 });
 
 test('bucket, upload and download requests send X-Rivium-SDK', async () => {
-  const storage = new RiviumStorage({ apiKey: 'rv_live_test' });
+  const storage = new RiviumStorage({ apiKey: 'rv_live_test', userToken: 'a.b.c' });
 
   await storage.listBuckets();
   await storage.upload('b1', 'a.txt', 'hello');
